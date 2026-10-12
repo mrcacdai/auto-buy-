@@ -15,6 +15,7 @@ const {
 
 const autobuyCommand = require('./commands/autobuy');
 const gachtheCommand = require('./commands/gachthe');
+const soduCommand = require('./commands/sodu');
 const { handleInteraction } = require('./handlers/interaction');
 
 /**
@@ -47,6 +48,7 @@ async function startDiscordBot(io) {
   const commands = [
     autobuyCommand.data.toJSON(),
     gachtheCommand.data.toJSON(),
+    soduCommand.data.toJSON(),
   ];
 
   await rest.put(

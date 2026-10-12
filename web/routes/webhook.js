@@ -35,6 +35,7 @@ const axios = require('axios');
 const { formatNumber, formatStock } = require('../../utils/parser');
 const { EmbedBuilder, MessageFlags } = require('discord.js');
 const { verifyCallbackSign, checkCard, getStatusDescription } = require('../../utils/cardService');
+const { addBalance, getBalance } = require('../../utils/balanceManager');
 
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
 
@@ -352,23 +353,16 @@ async function processCardTransaction(data) {
   // status 1: Thành công đúng mệnh giá | status 2: Thành công sai mệnh giá
   if (statusCode === 1 || statusCode === 2) {
     const cardMoney = actualValue > 0 ? actualValue : order.amount;
-    const gameMoney = Math.floor((cardMoney / basePrice) * baseAmount);
 
-    webLog(`✅ Nạp thẻ thành công cho ${order.userTag} — ${formatNumber(cardMoney)}đ => ${formatStock(gameMoney)} tiền game`);
+    // Cộng tiền vào số dư cá nhân của member
+    const depositRes = await addBalance(order.userId, cardMoney, 'CARD_WEBHOOK', {
+      telco: telco || order.telco,
+      serial: serial || order.serial,
+      requestId: order.requestId,
+    });
+    const newBalance = depositRes.success ? depositRes.newBalance : getBalance(order.userId);
 
-    let executedCommand = 'Bot chưa kết nối (Không thể gửi lệnh)';
-    if (mcBot) {
-      executedCommand = `/pay ${order.ign} ${gameMoney}`;
-      const success = mcBot.sendPayCommand(order.ign, gameMoney);
-      if (!success) {
-        executedCommand = 'Lỗi: Bot chưa kết nối';
-        webLog('❌ Không thể gửi lệnh /pay. Bot chưa kết nối.');
-      }
-    }
-
-    config.stock = Math.max(0, config.stock - gameMoney);
-    saveConfig(config);
-    if (io) io.emit('configUpdate', config);
+    webLog(`✅ Nạp thẻ thành công cho ${order.userTag} — Đã cộng +${formatNumber(cardMoney)}đ vào số dư (Hiện có: ${formatNumber(newBalance)}đ)`);
 
     // Gửi DM cho người dùng
     if (discordClient) {
@@ -381,15 +375,14 @@ async function processCardTransaction(data) {
             [
               statusCode === 1
                 ? 'Thẻ cào của bạn đã được duyệt thành công đúng mệnh giá.'
-                : 'Thẻ của bạn đã được duyệt nhưng **sai mệnh giá khai báo**. Hệ thống đã tính tiền theo mệnh giá thực.',
+                : 'Thẻ của bạn đã được duyệt nhưng **sai mệnh giá khai báo**. Hệ thống đã cộng tiền theo mệnh giá thực.',
               '',
               `**Nhà mạng:** \`${telco || order.telco}\``,
-              `**Mệnh giá nhận:** \`${formatNumber(cardMoney)} VNĐ\``,
-              `**Số tiền game nhận được:** \`${formatStock(gameMoney)}\``,
-              `**Nhân vật nhận (IGN):** \`${order.ign}\``,
+              `**Số tiền nạp:** \`+${formatNumber(cardMoney)} VNĐ\``,
+              `**Số dư hiện tại của bạn:** \`${formatNumber(newBalance)} VNĐ\``,
               `**Mã giao dịch:** \`${order.requestId}\``,
               '',
-              `Tiền game đã được chuyển trực tiếp qua lệnh \`/pay\`. Chúc bạn chơi vui! 🎉`,
+              `👉 **Cách mua tiền game:** Bấm nút **💸 Mua Tiền** trên bảng Panel và điền phương thức là \`card\` hoặc \`thẻ cào\` để dùng số dư này mua money! 🎉`,
             ].join('\n')
           )
           .setTimestamp();
@@ -405,17 +398,16 @@ async function processCardTransaction(data) {
       const webhookUrl = process.env.ADMIN_WEBHOOK_URL;
       if (webhookUrl && !webhookUrl.includes('YOUR_WEBHOOK_ID')) {
         const logEmbed = {
-          title: '📋 Nhật Ký Nạp Thẻ Cào',
+          title: '📋 Nhật Ký Nạp Thẻ Cào (Cộng Số Dư)',
           color: statusCode === 1 ? 0x57f287 : 0xfaa61a,
           fields: [
             { name: '🕐 Thời gian', value: new Date().toISOString(), inline: true },
-            { name: '👤 Người mua', value: `${order.userTag} (${order.userId})`, inline: true },
+            { name: '👤 Người nạp', value: `${order.userTag} (${order.userId})`, inline: true },
             { name: '💳 Loại thẻ', value: `${telco || order.telco}`, inline: true },
-            { name: '💵 Mệnh giá', value: `${formatNumber(cardMoney)} VNĐ`, inline: true },
-            { name: '💰 Tiền game', value: formatStock(gameMoney), inline: true },
-            { name: '🎮 IGN', value: `\`${order.ign}\``, inline: true },
+            { name: '💵 Tiền nạp', value: `+${formatNumber(cardMoney)} VNĐ`, inline: true },
+            { name: '💰 Số dư sau nạp', value: `${formatNumber(newBalance)} VNĐ`, inline: true },
             { name: '🔢 Serial', value: `\`${serial || order.serial}\``, inline: true },
-            { name: '🤖 Lệnh đã chạy', value: `\`${executedCommand}\``, inline: false },
+            { name: '🆔 Request ID', value: `\`${order.requestId}\``, inline: false },
           ],
           timestamp: new Date().toISOString(),
         };

@@ -62,9 +62,10 @@ function buildPanel(config) {
         name: '📋 Hướng Dẫn Mua',
         value: [
           '1️⃣ Bấm nút **Mua Tiền** bên dưới',
-          '2️⃣ Điền số tiền, phương thức thanh toán & IGN',
-          '3️⃣ Quét mã QR và chuyển khoản',
-          '4️⃣ Chờ hệ thống tự động giao tiền!',
+          '2️⃣ Điền số tiền, phương thức & IGN',
+          '• **Ngân hàng / Momo**: Quét mã QR chuyển khoản',
+          '• **Thẻ cào / Card**: Dùng lệnh `/gachthe` nạp vào số dư trước, sau đó điền `Card` để mua bằng số dư!',
+          '3️⃣ Chờ hệ thống tự động giao tiền in-game qua `/pay`!',
         ].join('\n'),
       },
       {

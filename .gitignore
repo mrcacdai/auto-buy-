@@ -8,6 +8,9 @@ node_modules/
 # Authentication cache (Minecraft / Xbox tokens)
 auth-cache/
 
+# User balance data
+data/
+
 # Logs
 *.log
 npm-debug.log*

@@ -2,7 +2,7 @@
  * bot/commands/gachthe.js
  * ───────────────────────
  * Slash command /gachthe
- * Gạch thẻ cào tự động và nhận tiền game Minecraft.
+ * Gạch thẻ cào tự động và lưu số tiền vào SỐ DƯ CÁ NHÂN của member.
  */
 
 const {
@@ -10,21 +10,13 @@ const {
   EmbedBuilder,
   MessageFlags,
 } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
 const { sendCard, getStatusDescription } = require('../../utils/cardService');
-const { formatNumber, formatStock } = require('../../utils/parser');
-
-const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
-
-function loadConfig() {
-  delete require.cache[CONFIG_PATH];
-  return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-}
+const { formatNumber } = require('../../utils/parser');
+const { addBalance, getBalance } = require('../../utils/balanceManager');
 
 const data = new SlashCommandBuilder()
   .setName('gachthe')
-  .setDescription('💳 Gạch thẻ cào tự động để nạp tiền game')
+  .setDescription('💳 Gạch thẻ cào tự động để nạp tiền vào số dư tài khoản')
   .addStringOption((option) =>
     option
       .setName('telco')
@@ -68,34 +60,21 @@ const data = new SlashCommandBuilder()
       .setName('serial')
       .setDescription('Số serial in trên thẻ')
       .setRequired(true)
-  )
-  .addStringOption((option) =>
-    option
-      .setName('ign')
-      .setDescription('Tên nhân vật Minecraft (IGN) nhận tiền game')
-      .setRequired(true)
   );
 
 async function execute(interaction) {
-  // Trả lời riêng tư (Ephemeral) để tránh lộ mã PIN thẻ trong kênh chat
+  // Trả lời riêng tư (Ephemeral) để bảo mật mã PIN thẻ
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const telco = interaction.options.getString('telco');
   const amount = interaction.options.getInteger('amount');
   const code = interaction.options.getString('code').trim();
   const serial = interaction.options.getString('serial').trim();
-  const ign = interaction.options.getString('ign').trim();
 
-  const config = loadConfig();
-  const { baseAmount, basePrice } = config.price;
-
-  // Tính số tiền game tương ứng với mệnh giá thẻ
-  const estimatedGameMoney = Math.floor((amount / basePrice) * baseAmount);
-
-  // Kiểm tra kho hàng
-  if ((config.stock || 0) < estimatedGameMoney) {
+  // Validate mã thẻ và serial cơ bản (chỉ gồm chữ và số)
+  if (!/^[a-zA-Z0-9]+$/.test(code) || !/^[a-zA-Z0-9]+$/.test(serial)) {
     return interaction.editReply({
-      content: `❌ **Kho hàng không đủ để giao dịch:** Cần \`${formatStock(estimatedGameMoney)}\` nhưng kho chỉ còn \`${formatStock(config.stock || 0)}\` tiền game. Vui lòng liên hệ Admin.`,
+      content: '❌ Mã thẻ (PIN) và số serial chỉ được chứa chữ cái và số, không chứa ký tự đặc biệt hoặc dấu cách.',
     });
   }
 
@@ -105,7 +84,7 @@ async function execute(interaction) {
   // Ghi log ra web panel
   if (interaction.client.webLog) {
     interaction.client.webLog(
-      `[Gạch Thẻ] Người dùng ${interaction.user.tag} gửi thẻ ${telco} ${formatNumber(amount)}đ (IGN: ${ign})`,
+      `[Gạch Thẻ] ${interaction.user.tag} nạp thẻ ${telco} ${formatNumber(amount)}đ (Serial: ${serial})`,
     );
   }
 
@@ -119,8 +98,6 @@ async function execute(interaction) {
       code,
       serial,
       amount,
-      ign,
-      estimatedGameMoney,
       createdAt: Date.now(),
     });
   }
@@ -146,20 +123,22 @@ async function execute(interaction) {
 
   // ── Trường hợp 99: Đang chờ duyệt (Phổ biến nhất) ──
   if (statusCode === 99) {
+    const currentBalance = getBalance(interaction.user.id);
     const embed = new EmbedBuilder()
       .setColor(0xfaa61a) // Vàng cam
       .setTitle('⏳ Thẻ Đang Chờ Xử Lý')
       .setDescription(
         [
-          `Hệ thống đã tiếp nhận thẻ của bạn và đang gửi tới nhà mạng để thẩm định.`,
-          `Khi duyệt thành công, tiền game sẽ được tự động chuyển qua lệnh \`/pay\` tới tài khoản Minecraft.`,
+          `Hệ thống đã tiếp nhận thẻ và gửi tới nhà mạng để thẩm định.`,
+          `Khi duyệt thành công, tiền sẽ được tự động cộng vào **Số Dư Cá Nhân** của bạn!`,
           '',
           `**Nhà mạng:** \`${telco}\``,
           `**Mệnh giá khai báo:** \`${formatNumber(amount)} VNĐ\``,
-          `**Tiền game dự kiến:** \`${formatStock(estimatedGameMoney)}\``,
-          `**Nhân vật nhận (IGN):** \`${ign}\``,
           `**Mã serial:** \`${serial}\``,
+          `**Số dư hiện tại của bạn:** \`${formatNumber(currentBalance)} VNĐ\``,
           `**Mã giao dịch (ID):** \`${requestId}\``,
+          '',
+          `💡 *Bạn có thể gõ lệnh \`/sodu\` để kiểm tra số dư bất cứ lúc nào.*`,
         ].join('\n')
       )
       .setFooter({ text: 'Vui lòng không gửi lại thẻ nhiều lần' })
@@ -170,30 +149,31 @@ async function execute(interaction) {
 
   // ── Trường hợp 1: Thành công ngay lập tức ──
   if (statusCode === 1) {
+    // Cộng tiền vào số dư của member
+    const depositResult = await addBalance(
+      interaction.user.id,
+      amount,
+      'CARD_INSTANT',
+      { telco, serial, requestId }
+    );
+
+    const newBalance = depositResult.success ? depositResult.newBalance : getBalance(interaction.user.id);
+
     const embed = new EmbedBuilder()
       .setColor(0x57f287) // Xanh lá
-      .setTitle('✅ Nạp Thẻ Thành Công!')
+      .setTitle('✅ Nạp Thẻ Cào Thành Công!')
       .setDescription(
         [
-          `Thẻ đã được gạch thành công đúng mệnh giá!`,
+          `Thẻ đã được gạch thành công và cộng vào số dư của bạn!`,
           '',
           `**Nhà mạng:** \`${telco}\``,
-          `**Mệnh giá:** \`${formatNumber(amount)} VNĐ\``,
-          `**Tiền game:** \`${formatStock(estimatedGameMoney)}\``,
-          `**IGN:** \`${ign}\``,
+          `**Mệnh giá nạp:** \`+${formatNumber(amount)} VNĐ\``,
+          `**Số dư hiện tại:** \`${formatNumber(newBalance)} VNĐ\``,
+          '',
+          `👉 *Bạn có thể dùng số dư này mua money in-game qua nút **💸 Mua Tiền** trên Discord!*`,
         ].join('\n')
       )
       .setTimestamp();
-
-    // Thực hiện /pay ngay
-    const { mcBot } = global;
-    if (mcBot && typeof mcBot.sendPayCommand === 'function') {
-      mcBot.sendPayCommand(ign, estimatedGameMoney);
-    }
-
-    // Trừ kho
-    config.stock = Math.max(0, config.stock - estimatedGameMoney);
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
 
     return interaction.editReply({ embeds: [embed] });
   }
