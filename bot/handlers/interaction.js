@@ -75,6 +75,10 @@ async function handleInteraction(interaction, client, io) {
       const autobuy = require('../commands/autobuy');
       return autobuy.execute(interaction);
     }
+    if (interaction.commandName === 'gachthe') {
+      const gachthe = require('../commands/gachthe');
+      return gachthe.execute(interaction);
+    }
   }
 
   // ────────────────────────────────────────────

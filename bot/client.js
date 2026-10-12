@@ -14,6 +14,7 @@ const {
 } = require('discord.js');
 
 const autobuyCommand = require('./commands/autobuy');
+const gachtheCommand = require('./commands/gachthe');
 const { handleInteraction } = require('./handlers/interaction');
 
 /**
@@ -30,6 +31,8 @@ async function startDiscordBot(io) {
 
   // ── Lưu trữ đơn hàng đang chờ: Map<discordUserId, orderData> ──
   client.pendingOrders = new Collection();
+  // ── Lưu trữ thẻ cào đang chờ xử lý: Map<requestId, cardData> ──
+  client.pendingCards = new Collection();
 
   // ── Hàm gửi log tới web panel console ──
   client.webLog = (message) => {
@@ -41,7 +44,10 @@ async function startDiscordBot(io) {
   // ── Đăng ký slash commands với Discord API ──
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
-  const commands = [autobuyCommand.data.toJSON()];
+  const commands = [
+    autobuyCommand.data.toJSON(),
+    gachtheCommand.data.toJSON(),
+  ];
 
   await rest.put(
     Routes.applicationGuildCommands(

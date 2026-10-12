@@ -32,8 +32,9 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
-const { formatNumber } = require('../../utils/parser');
+const { formatNumber, formatStock } = require('../../utils/parser');
 const { EmbedBuilder, MessageFlags } = require('discord.js');
+const { verifyCallbackSign, checkCard, getStatusDescription } = require('../../utils/cardService');
 
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
 
@@ -276,11 +277,9 @@ async function pollBytemart() {
       
       // Chuyển đổi định dạng của Bytemart/MBBank về định dạng chung để xử lý
       const normalizedTxs = records.map(tx => {
-        // Tùy theo API trả về amount hay creditAmount
         let amount = tx.amount ? parseFloat(tx.amount) : 0;
         if (tx.creditAmount) amount = parseFloat(tx.creditAmount);
         
-        // Tùy theo trường ID giao dịch (refNo, tranId, id)
         const id = tx.refNo || tx.tranId || tx.id || tx.transactionId || String(Math.random());
         
         return {
@@ -288,25 +287,249 @@ async function pollBytemart() {
           description: tx.description || tx.remark || '',
           amount: amount
         };
-      }).filter(tx => tx.amount > 0); // Chỉ lấy giao dịch nhận tiền
+      }).filter(tx => tx.amount > 0);
       
-      // Lọc các giao dịch mới (chưa có trong Set)
       const newTxs = normalizedTxs.filter(tx => !processedTxs.has(tx.id));
       
       if (newTxs.length > 0) {
         await processTransactions(newTxs);
-        // Đánh dấu đã xử lý
         newTxs.forEach(tx => processedTxs.add(tx.id));
       }
     }
   } catch(e) {
-    // Bỏ qua lỗi mạng khi poll
   } finally {
     isPolling = false;
   }
 }
 
-// Chạy polling mỗi 3 giây (Nhanh nhất có thể nhưng an toàn)
+// Chạy polling mỗi 3 giây
 setInterval(pollBytemart, 3000);
 
+// ────────────────────────────────────────────────────────────
+// ── XỬ LÝ GẠCH THẺ CÀO (Card Partner API / trumthengon.com) ──
+// ────────────────────────────────────────────────────────────
+
+async function processCardTransaction(data) {
+  const { io, discordClient, mcBot } = global;
+
+  const webLog = (msg) => {
+    const line = `[Webhook/GạchThẻ] ${new Date().toLocaleTimeString()} — ${msg}`;
+    console.log(line);
+    if (io) io.emit('log', line);
+  };
+
+  const requestId = data.request_id;
+  const statusCode = Number(data.status);
+  const declaredValue = Number(data.declared_value || data.amount || 0);
+  const actualValue = Number(data.value || declaredValue);
+  const serial = data.serial || '';
+  const telco = data.telco || '';
+  const message = data.message || getStatusDescription(statusCode);
+
+  webLog(`Kết quả thẻ [${telco} ${serial}]: Trạng thái ${statusCode} (${message}) - Thực nhận: ${actualValue}`);
+
+  let order = null;
+  if (discordClient && discordClient.pendingCards) {
+    order = discordClient.pendingCards.get(requestId);
+    if (!order) {
+      for (const [, pending] of discordClient.pendingCards.entries()) {
+        if (pending.serial === serial) {
+          order = pending;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!order) {
+    webLog(`⚠️ Không tìm thấy đơn thẻ chờ cho ID: ${requestId} (serial: ${serial}).`);
+    return;
+  }
+
+  const config = loadConfig();
+  const { baseAmount, basePrice } = config.price;
+
+  // status 1: Thành công đúng mệnh giá | status 2: Thành công sai mệnh giá
+  if (statusCode === 1 || statusCode === 2) {
+    const cardMoney = actualValue > 0 ? actualValue : order.amount;
+    const gameMoney = Math.floor((cardMoney / basePrice) * baseAmount);
+
+    webLog(`✅ Nạp thẻ thành công cho ${order.userTag} — ${formatNumber(cardMoney)}đ => ${formatStock(gameMoney)} tiền game`);
+
+    let executedCommand = 'Bot chưa kết nối (Không thể gửi lệnh)';
+    if (mcBot) {
+      executedCommand = `/pay ${order.ign} ${gameMoney}`;
+      const success = mcBot.sendPayCommand(order.ign, gameMoney);
+      if (!success) {
+        executedCommand = 'Lỗi: Bot chưa kết nối';
+        webLog('❌ Không thể gửi lệnh /pay. Bot chưa kết nối.');
+      }
+    }
+
+    config.stock = Math.max(0, config.stock - gameMoney);
+    saveConfig(config);
+    if (io) io.emit('configUpdate', config);
+
+    // Gửi DM cho người dùng
+    if (discordClient) {
+      try {
+        const user = await discordClient.users.fetch(order.userId);
+        const successEmbed = new EmbedBuilder()
+          .setColor(statusCode === 1 ? 0x57f287 : 0xfaa61a)
+          .setTitle(statusCode === 1 ? '✅ Nạp Thẻ Cào Thành Công!' : '⚠️ Nạp Thẻ Thành Công (Sai Mệnh Giá)')
+          .setDescription(
+            [
+              statusCode === 1
+                ? 'Thẻ cào của bạn đã được duyệt thành công đúng mệnh giá.'
+                : 'Thẻ của bạn đã được duyệt nhưng **sai mệnh giá khai báo**. Hệ thống đã tính tiền theo mệnh giá thực.',
+              '',
+              `**Nhà mạng:** \`${telco || order.telco}\``,
+              `**Mệnh giá nhận:** \`${formatNumber(cardMoney)} VNĐ\``,
+              `**Số tiền game nhận được:** \`${formatStock(gameMoney)}\``,
+              `**Nhân vật nhận (IGN):** \`${order.ign}\``,
+              `**Mã giao dịch:** \`${order.requestId}\``,
+              '',
+              `Tiền game đã được chuyển trực tiếp qua lệnh \`/pay\`. Chúc bạn chơi vui! 🎉`,
+            ].join('\n')
+          )
+          .setTimestamp();
+
+        await user.send({ embeds: [successEmbed] }).catch(() => {});
+      } catch (e) {
+        webLog(`Không thể gửi DM tới ${order.userTag}: ${e.message}`);
+      }
+    }
+
+    // Gửi Admin webhook log
+    try {
+      const webhookUrl = process.env.ADMIN_WEBHOOK_URL;
+      if (webhookUrl && !webhookUrl.includes('YOUR_WEBHOOK_ID')) {
+        const logEmbed = {
+          title: '📋 Nhật Ký Nạp Thẻ Cào',
+          color: statusCode === 1 ? 0x57f287 : 0xfaa61a,
+          fields: [
+            { name: '🕐 Thời gian', value: new Date().toISOString(), inline: true },
+            { name: '👤 Người mua', value: `${order.userTag} (${order.userId})`, inline: true },
+            { name: '💳 Loại thẻ', value: `${telco || order.telco}`, inline: true },
+            { name: '💵 Mệnh giá', value: `${formatNumber(cardMoney)} VNĐ`, inline: true },
+            { name: '💰 Tiền game', value: formatStock(gameMoney), inline: true },
+            { name: '🎮 IGN', value: `\`${order.ign}\``, inline: true },
+            { name: '🔢 Serial', value: `\`${serial || order.serial}\``, inline: true },
+            { name: '🤖 Lệnh đã chạy', value: `\`${executedCommand}\``, inline: false },
+          ],
+          timestamp: new Date().toISOString(),
+        };
+        await axios.post(webhookUrl, { embeds: [logEmbed] });
+      }
+    } catch (e) {
+      webLog(`Lỗi gửi admin webhook thẻ cào: ${e.message}`);
+    }
+  } else if (statusCode === 3 || statusCode === 100) {
+    // Thẻ lỗi
+    webLog(`❌ Thẻ bị từ chối cho ${order.userTag}: ${message}`);
+    if (discordClient) {
+      try {
+        const user = await discordClient.users.fetch(order.userId);
+        const failEmbed = new EmbedBuilder()
+          .setColor(0xed4245)
+          .setTitle('❌ Nạp Thẻ Cào Thất Bại')
+          .setDescription(
+            [
+              `Thẻ cào của bạn đã bị nhà mạng từ chối.`,
+              '',
+              `**Lý do:** \`${message}\``,
+              `**Nhà mạng:** \`${telco || order.telco}\``,
+              `**Serial:** \`${serial || order.serial}\``,
+              `**Mã giao dịch:** \`${order.requestId}\``,
+              '',
+              `Nếu có nhầm lẫn, vui lòng liên hệ Admin để được hỗ trợ.`,
+            ].join('\n')
+          )
+          .setTimestamp();
+
+        await user.send({ embeds: [failEmbed] }).catch(() => {});
+      } catch (e) {}
+    }
+  }
+
+  // Xóa khỏi danh sách chờ nếu đã có kết quả cuối cùng
+  if ([1, 2, 3, 100].includes(statusCode) && discordClient && discordClient.pendingCards) {
+    discordClient.pendingCards.delete(order.requestId);
+  }
+}
+
+/**
+ * Route nhận callback thẻ cào từ cổng gạch thẻ (POST & GET)
+ * Endpoint: /api/webhook/card hoặc /api/webhook/callback
+ */
+async function handleCardCallback(req, res) {
+  try {
+    const data = Object.keys(req.body || {}).length ? req.body : req.query;
+    if (!data || (!data.status && !data.request_id)) {
+      return res.status(400).json({ status: 0, message: 'Dữ liệu không hợp lệ' });
+    }
+
+    // Xác minh chữ ký nếu có callback_sign
+    if (data.callback_sign && data.code && data.serial) {
+      const isValid = verifyCallbackSign(data.code, data.serial, data.callback_sign);
+      if (!isValid) {
+        console.warn('[Webhook/Card] Chữ ký callback không hợp lệ!');
+        return res.status(400).json({ status: 0, message: 'Sai chữ ký callback' });
+      }
+    }
+
+    await processCardTransaction(data);
+    return res.json({ status: 1, message: 'Thành công' });
+  } catch (err) {
+    console.error('[Webhook/Card] Lỗi xử lý callback:', err);
+    return res.status(500).json({ status: 0, error: err.message });
+  }
+}
+
+router.all('/card', handleCardCallback);
+router.all('/callback', handleCardCallback);
+
+// ── Tự động Polling kiểm tra thẻ đang chờ (Backup khi webhook không gọi tới được) ──
+let isCardPolling = false;
+async function pollPendingCards() {
+  if (isCardPolling) return;
+  const { discordClient } = global;
+  if (!discordClient || !discordClient.pendingCards || discordClient.pendingCards.size === 0) return;
+
+  isCardPolling = true;
+  try {
+    for (const [requestId, order] of discordClient.pendingCards.entries()) {
+      // Chỉ poll các đơn tạo quá 10 giây và dưới 10 phút
+      const age = Date.now() - order.createdAt;
+      if (age < 10000 || age > 10 * 60 * 1000) {
+        if (age > 10 * 60 * 1000) discordClient.pendingCards.delete(requestId);
+        continue;
+      }
+
+      const res = await checkCard({
+        telco: order.telco,
+        code: order.code,
+        serial: order.serial,
+        amount: order.amount,
+        requestId: order.requestId,
+      });
+
+      if (res.success && res.data && res.data.status !== undefined) {
+        const checkStatus = Number(res.data.status);
+        if (checkStatus !== 99) {
+          // Thẻ đã có kết quả (1, 2, 3...)
+          await processCardTransaction({ ...res.data, request_id: requestId });
+        }
+      }
+    }
+  } catch (e) {
+  } finally {
+    isCardPolling = false;
+  }
+}
+
+// Kiểm tra thẻ chờ mỗi 10 giây
+setInterval(pollPendingCards, 10000);
+
 module.exports = router;
+

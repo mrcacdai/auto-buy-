@@ -181,6 +181,7 @@ async function startWebPanel() {
 
   // ── Route webhook ──
   app.use('/api/webhook', webhookRouter);
+  app.use('/charge/callback', webhookRouter);
 
   // ── Kết nối Socket.io ──
   io.on('connection', (socket) => {
