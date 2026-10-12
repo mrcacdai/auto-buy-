@@ -1,0 +1,17 @@
+{
+  "price": {
+    "baseAmount": 1000000,
+    "basePrice": 330,
+    "currency": "VND"
+  },
+  "stock": 700000000,
+  "paymentMethods": [
+    "Bank Transfer",
+    "Momo"
+  ],
+  "accounts": [],
+  "panelMessage": {
+    "channelId": "1558181145718423723",
+    "messageId": "1558844545368727594"
+  }
+}

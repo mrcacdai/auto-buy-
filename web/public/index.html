@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auto Buy Money — Bảng Quản Trị</title>
+  <link rel="stylesheet" href="/style.css" />
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <!-- ═══════════════ PARTICLES BACKGROUND ═══════════════ -->
+  <div class="particles" id="particles"></div>
+
+  <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">⛏️</div>
+      <div class="brand-text">
+        <h1>AutoBuy</h1>
+        <span>Bảng Quản Trị</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" data-section="dashboard">
+        <span class="nav-icon">📊</span>
+        <span>Tổng Quan</span>
+      </a>
+      <a href="#" class="nav-item" data-section="config">
+        <span class="nav-icon">⚙️</span>
+        <span>Cấu Hình</span>
+      </a>
+      <a href="#" class="nav-item" data-section="console">
+        <span class="nav-icon">🖥️</span>
+        <span>Console</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="server-info">
+        <span class="server-dot"></span>
+        <span>donutsmp.net</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══════════════════ MAIN CONTENT ═══════════════════ -->
+  <div class="content">
+    <!-- ── TOP BAR ── -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h2 id="pageTitle">📊 Tổng Quan</h2>
+      </div>
+      <div class="topbar-right">
+        <div class="status-pills">
+          <div class="pill" id="pillAccount" style="border-color: var(--accent-purple); color: var(--text-main);">
+            <span class="pill-dot" style="background: var(--accent-purple); box-shadow: 0 0 8px rgba(139, 92, 246, 0.5);"></span>
+            <span id="currentAccount">Chưa kết nối</span>
+          </div>
+          <div class="pill" id="pillWeb">
+            <span class="pill-dot"></span>
+            <span>Web Panel</span>
+          </div>
+          <div class="pill" id="pillDiscord">
+            <span class="pill-dot"></span>
+            <span>Discord</span>
+          </div>
+          <div class="pill" id="pillMC">
+            <span class="pill-dot"></span>
+            <span>Minecraft</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ═══════════════ SECTION: DASHBOARD ═══════════════ -->
+    <section class="section active" id="section-dashboard">
+      <!-- Stats Cards -->
+      <div class="stats-row">
+        <div class="stat-card stat-purple">
+          <div class="stat-icon">💰</div>
+          <div class="stat-info">
+            <span class="stat-label">Kho Hàng</span>
+            <span class="stat-value" id="dashStock">0</span>
+          </div>
+          <div class="stat-glow"></div>
+        </div>
+        <div class="stat-card stat-green">
+          <div class="stat-icon">🏷️</div>
+          <div class="stat-info">
+            <span class="stat-label">Giá Hiện Tại</span>
+            <span class="stat-value" id="dashPrice">—</span>
+          </div>
+          <div class="stat-glow"></div>
+        </div>
+        <div class="stat-card stat-blue">
+          <div class="stat-icon">📦</div>
+          <div class="stat-info">
+            <span class="stat-label">Đơn Vị Tiền</span>
+            <span class="stat-value" id="dashCurrency">VND</span>
+          </div>
+          <div class="stat-glow"></div>
+        </div>
+      </div>
+
+      <!-- Quick Actions + Mini Console -->
+      <div class="dashboard-grid">
+        <div class="card card-banner">
+          <div class="banner-bg"></div>
+          <div class="banner-content">
+            <h2>🎮 Donut SMP — Auto Buy Money</h2>
+            <p>Hệ thống mua bán tiền game tự động qua Discord + Mineflayer</p>
+            <div class="banner-tags">
+              <span class="tag tag-purple">Discord.js v14</span>
+              <span class="tag tag-green">Mineflayer</span>
+              <span class="tag tag-orange">VietQR</span>
+              <span class="tag tag-blue">Socket.io</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card card-mini-console">
+          <div class="card-head">
+            <span>🖥️ Console Nhanh</span>
+            <span class="badge-live">● LIVE</span>
+          </div>
+          <div class="mini-console" id="miniConsole">
+            <p class="log-line log-system">Đang chờ log …</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ SECTION: CONFIG ═══════════════ -->
+    <section class="section" id="section-config">
+      <div class="config-grid">
+        <!-- Cấu hình giá -->
+        <div class="card">
+          <div class="card-head">
+            <span>🏷️ Cấu Hình Giá</span>
+          </div>
+          <div class="card-content">
+            <form id="priceForm">
+              <div class="form-field">
+                <label for="baseAmount">Số tiền game gốc</label>
+                <div class="input-wrapper">
+                  <input type="number" id="baseAmount" placeholder="1000000" />
+                  <span class="input-suffix">💎</span>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-field">
+                  <label for="basePrice">Giá bán</label>
+                  <div class="input-wrapper">
+                    <input type="number" id="basePrice" placeholder="1000" />
+                    <span class="input-suffix">💵</span>
+                  </div>
+                </div>
+                <div class="form-field">
+                  <label for="currency">Đơn vị tiền tệ</label>
+                  <div class="input-wrapper">
+                    <input type="text" id="currency" placeholder="VND" />
+                    <span class="input-suffix">🏦</span>
+                  </div>
+                </div>
+              </div>
+              <div class="price-display" id="pricePreview">—</div>
+              <button type="submit" class="btn btn-primary">
+                💾 Cập Nhật Giá
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Cấu hình kho hàng -->
+        <div class="card">
+          <div class="card-head">
+            <span>📦 Kho Hàng</span>
+          </div>
+          <div class="card-content">
+            <div class="stock-hero">
+              <div class="stock-ring">
+                <span class="stock-number" id="stockDisplay">0</span>
+              </div>
+              <span class="stock-subtitle">tiền game có sẵn</span>
+            </div>
+            <form id="stockForm" class="stock-form">
+              <div class="input-wrapper">
+                <input type="text" id="stockInput" placeholder="Nhập số lượng mới (VD: 1000000, 1m, 1b)" />
+                <span class="input-suffix">📦</span>
+              </div>
+              <button type="submit" class="btn btn-secondary">
+                📦 Cập Nhật Kho
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quản Lý Tài Khoản -->
+      <div class="card" style="margin-top: 1rem;">
+        <div class="card-head">
+          <span>👥 Quản Lý Tài Khoản</span>
+        </div>
+        <div class="card-content">
+          <ul id="accountList" class="account-list" style="list-style: none; padding: 0; margin-bottom: 1rem;">
+            <!-- Danh sách tài khoản sẽ được render ở đây -->
+          </ul>
+          <form id="accountForm" style="display: flex; gap: 0.5rem; align-items: center;">
+            <div class="input-wrapper" style="flex: 1;">
+              <input type="text" id="accountInput" placeholder="Nhập email/username" required />
+              <span class="input-suffix">✉️</span>
+            </div>
+            <button type="submit" class="btn btn-primary" style="white-space: nowrap;">
+              ➕ Thêm
+            </button>
+          </form>
+          <div style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+            <button id="reconnectBtn" class="btn btn-secondary" style="width: 100%;">
+              🔄 Thoát Tài Khoản & Kết Nối Lại
+            </button>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; text-align: center;">
+              (Dùng để đăng xuất tài khoản hiện tại và chuyển sang tài khoản mới)
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ SECTION: CONSOLE ═══════════════ -->
+    <section class="section" id="section-console">
+      <div class="card card-full">
+        <div class="card-head">
+          <div class="console-title-bar">
+            <span>🖥️ Live Console</span>
+            <span class="badge-live">● LIVE</span>
+          </div>
+          <button id="clearConsole" class="btn btn-ghost btn-sm">🗑️ Xóa</button>
+        </div>
+        <div class="console-body" id="console">
+          <p class="log-line log-system">Đang chờ log …</p>
+        </div>
+        <div style="border-top: 1px solid var(--border); padding: 1rem 1.25rem; background: rgba(255,255,255,0.02);">
+          <form id="chatForm" style="display: flex; gap: 0.5rem;">
+            <input type="text" id="chatInput" placeholder="Nhập lệnh (vd: /spawn) hoặc tin nhắn..." style="flex: 1;" autocomplete="off" />
+            <button type="submit" class="btn btn-primary" style="width: auto; padding: 0 1.5rem;">Gửi</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ═══ TOAST ═══ -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Socket.io client (tự động phục vụ bởi socket.io) -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/script.js"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "auto-buy-money",
+  "version": "1.0.0",
+  "description": "Discord bot + Mineflayer + Web Panel for automated in-game money purchases",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "mineflayer": "^4.23.0",
+    "express": "^4.21.1",
+    "socket.io": "^4.8.1",
+    "dotenv": "^16.4.7",
+    "qrcode": "^1.5.4",
+    "axios": "^1.7.9"
+  }
+}
