@@ -36,6 +36,7 @@ const { formatNumber, formatStock } = require('../../utils/parser');
 const { EmbedBuilder, MessageFlags } = require('discord.js');
 const { verifyCallbackSign, checkCard, getStatusDescription } = require('../../utils/cardService');
 const { addBalance, getBalance } = require('../../utils/balanceManager');
+const { sendFeedbackThanks } = require('../../utils/feedbackNotifier');
 
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
 
@@ -233,6 +234,19 @@ async function processTransactions(transactions) {
         }
       } catch (err) {
         webLog(`❌ Không thể gửi admin webhook: ${err.message}`);
+      }
+
+      // ── Gửi lời cảm ơn vào kênh feedback ──
+      try {
+        await sendFeedbackThanks(discordClient, {
+          userId: order.userId,
+          gameMoney: order.amount,
+          ign: order.ign,
+          vnd: order.totalPrice,
+          paymentMethod: order.paymentMethod,
+        });
+      } catch (fbErr) {
+        webLog(`⚠️ Lỗi gửi feedback: ${fbErr.message}`);
       }
 
       // ── Xóa khỏi danh sách chờ ──

@@ -25,6 +25,7 @@ const axios = require('axios');
 const QRCode = require('qrcode');
 const { parseAmount, formatNumber, calculatePrice, formatStock } = require('../../utils/parser');
 const { getBalance, deductBalance, addBalance, acquireLock } = require('../../utils/balanceManager');
+const { sendFeedbackThanks } = require('../../utils/feedbackNotifier');
 
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
 
@@ -216,6 +217,19 @@ async function executeBalancePurchase(interaction, amountVnd, ign, client, io) {
         await axios.post(webhookUrl, { embeds: [adminEmbed] });
       }
     } catch (_) {}
+
+    // ── 9. Gửi lời cảm ơn vào kênh feedback ──
+    try {
+      await sendFeedbackThanks(client, {
+        userId,
+        gameMoney,
+        ign,
+        vnd: numericVnd,
+        paymentMethod: 'Số Dư Thẻ Cào',
+      });
+    } catch (fbErr) {
+      console.error('[Feedback] Lỗi gửi feedback:', fbErr.message);
+    }
   } finally {
     release();
   }

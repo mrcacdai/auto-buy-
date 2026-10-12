@@ -1,10 +1,10 @@
 {
   "price": {
     "baseAmount": 1000000,
-    "basePrice": 330,
+    "basePrice": 345,
     "currency": "VND"
   },
-  "stock": 700000000,
+  "stock": 500000000,
   "paymentMethods": [
     "Bank Transfer",
     "Momo"
