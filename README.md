@@ -7,17 +7,9 @@
 [![PHP](https://img.shields.io/badge/PHP-Backend-777BB4?style=for-the-badge&logo=php&logoColor=white)](https://www.php.net/)
 [![PM2](https://img.shields.io/badge/PM2-Process_Manager-2B037A?style=for-the-badge&logo=pm2&logoColor=white)](https://pm2.keymetrics.io/)
 
-**🌐 Ngôn ngữ / Language:**  
-[🇻🇳 Tiếng Việt](#lang-vi) &nbsp;|&nbsp; [🇺🇸 English](#lang-en)
-
 </div>
 
 ---
-
-<a id="lang-vi"></a>
-## 🇻🇳 Tiếng Việt
-
-> *[🇺🇸 Switch to English](#lang-en)*
 
 ### 📖 Giới thiệu
 **Auto-Buy** là hệ thống tự động hóa giao dịch, xử lý thanh toán ngân hàng và trả vật phẩm/dịch vụ tự động tích hợp đa nền tảng (**Bot**, **Web Dashboard** và **Minecraft Server**). Hệ thống giúp tối ưu hóa quy trình nạp tiền, kiểm tra biến động số dư và giao hàng theo thời gian thực mà không cần sự can thiệp thủ công của quản trị viên.
